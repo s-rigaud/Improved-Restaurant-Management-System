@@ -3,7 +3,7 @@
 
 import os
 from datetime import datetime
-from tkinter import ttk, END
+from tkinter import Tk, Toplevel, Event, ttk, END
 from ttkthemes import ThemedTk
 from reportlab.pdfgen import canvas
 from PIL import Image, ImageTk
@@ -15,10 +15,12 @@ from helpers import concrete_inc_dec
 localtime = datetime.now().strftime("%A %d %B %Y %H-%M-%S")
 
 
-class UI:
+class UI(ThemedTk):
     """Main class for the whole interface"""
 
-    def __init__(self, root: ThemedTk):
+    def __init__(self):
+        ThemedTk.__init__(self, theme="equilux")
+        root = self
         self.articles = {
             "Fried Potato": 35,
             "Chicken Burger": 25,
@@ -46,6 +48,8 @@ class UI:
     def _init_ui(self, root: ThemedTk):
         root.title("Restaurant Management")
         root.geometry(f"{self._width}x{self._height}")
+        root.resizable(False, False)
+        root.overrideredirect(1)
         root.configure(bg=self.bg_color)
         root.wm_attributes("-transparentcolor", "#eaeaea")
         curr_path = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +57,68 @@ class UI:
         self.logo_path = os.path.join(curr_path, "ananas.png")
         root.iconbitmap(self.ico_path)
 
+        # https://stackoverflow.com/questions/4055267#answer-4055612
+        self.bind("<ButtonPress-1>", self._start_moving)
+        self.bind("<ButtonRelease-1>", self._stop_moving)
+        self.bind("<B1-Motion>", self._on_motion)
+
+        self.configure_style()
+
+        notebk = ttk.Notebook(root)
+        notebk.pack()
+        common_frame = ttk.Frame(notebk, width=self._width, height=self._height)
+        price_frame = ttk.Frame(notebk, width=self._width, height=self._height)
+        notebk.add(common_frame, text="Billing")
+        notebk.add(price_frame, text="Prices $")
+
+        ########## FRAME 1
+        ### COMMON LABELS
+        title_frame = ttk.Frame(common_frame, width=self._width, height=100)
+        title_frame.place(x=0, y=0)
+        title = ttk.Label(
+            title_frame, text="Restaurant Management", style="title.TLabel"
+        )
+        title.place(x=self._width / 2, y=25, anchor="center")
+        self.time_label = ttk.Label(title_frame, text=localtime, style="time.TLabel")
+        self.time_label.place(x=self._width / 2, y=65, anchor="center")
+
+        ### FOOD MENU
+        self.display_food_frame(common_frame)
+        ### PRICE
+        self.display_total_frame(common_frame)
+        ### CALCULATOR
+        self.display_calculator_frame(common_frame)
+        ### CONTROL BUTTONS
+        index = 0
+        button_labels = {
+            "RESET": self.clear_fields,
+            "SAVE": self.save_bill_to_pdf,
+            "EXIT": root.destroy,
+        }
+        for label, function in button_labels.items():
+            control_button = ttk.Button(common_frame, text=label, command=function)
+            control_button.place(x=100 + 200 * index, y=400)
+            index += 1
+
+        ### COMMON BEHAVIOUR
+        self.clear_fields()
+        self.update_time()
+
+        ################# FRAME 2
+        self.display_food_price_frame(price_frame)
+
+    @property
+    def bill(self):
+        # TODO ADD cost + service charge (client doesn't have to know)
+        return "\n".join(
+            [
+                f"{label} : {entry.get()}"
+                for label, entry in self.price_entries.items()
+                if label != "Discount %"
+            ]
+        )
+
+    def configure_style(self):
         s = ttk.Style()
         s.theme_settings(
             "equilux",
@@ -79,25 +145,7 @@ class UI:
         s.configure("rfood.TLabel", font="{U.S. 101} 15 bold", foreground="#e1b12c")
         s.configure("yfood.TLabel", font="{U.S. 101} 15 bold", foreground="#e84118")
 
-        notebk = ttk.Notebook(root)
-        notebk.pack()
-        common_frame = ttk.Frame(notebk, width=self._width, height=self._height)
-        price_frame = ttk.Frame(notebk, width=self._width, height=self._height)
-        notebk.add(common_frame, text="Billing")
-        notebk.add(price_frame, text="Prices $")
-
-        ########## FRAME 1
-        ### COMMON LABELS
-        title_frame = ttk.Frame(common_frame, width=self._width, height=100)
-        title_frame.place(x=0, y=0)
-        title = ttk.Label(
-            title_frame, text="Restaurant Management", style="title.TLabel"
-        )
-        title.place(x=self._width / 2, y=25, anchor="center")
-        self.time_label = ttk.Label(title_frame, text=localtime, style="time.TLabel")
-        self.time_label.place(x=self._width / 2, y=65, anchor="center")
-
-        ### FOOD MENU
+    def display_food_frame(self, common_frame: ttk.Frame):
         temp_label = ttk.Label(common_frame, text="Order Num :")
         temp_label.place(x=100, y=100)
         self.order_entry = ttk.Entry(common_frame, justify="center")
@@ -121,7 +169,7 @@ class UI:
             self.article_entries.append((item, temp_entry))
             self.entries.append(temp_entry)
 
-        ### PRICE
+    def display_total_frame(self, common_frame: ttk.Frame):
         discount_p_label = ttk.Label(common_frame, text="Discount %")
         discount_p_label.place(x=380, y=97)
         discount_p_entry = ttk.Entry(common_frame, justify="center")
@@ -150,7 +198,7 @@ class UI:
             self.entries.append(price_entry)
             self.price_entries.update({price_txt: price_entry})
 
-        ### CALCULATOR
+    def display_calculator_frame(self, common_frame):
         self.res_entry = ttk.Entry(common_frame, style="res.TEntry", justify="center")
         self.res_entry.place(x=775, y=100, width=204, height=50)
         self.res_entry.bind("<Key>", lambda e: "break")
@@ -203,30 +251,17 @@ class UI:
             x=775, y=364, width=button_width * 4 + 4, height=button_height
         )
 
-        ### CONTROL BUTTONS
-        index = 0
-        button_labels = {
-            "RESET": self.clear_fields,
-            "SAVE": self.save_bill_to_pdf,
-            "EXIT": root.destroy,
-        }
-        for label, function in button_labels.items():
-            control_button = ttk.Button(common_frame, text=label, command=function)
-            control_button.place(x=100 + 200 * index, y=400)
-            index += 1
-
-        ### COMMON BEHAVIOUR
-        self.clear_fields()
-        self.update_time()
-
-        ################# FRAME 2
+    def display_food_price_frame(self, price_frame: ttk.Frame):
         index = 0
         articles = {"Food": "Price", **self.articles}
         for food, price in articles.items():
             food_label = ttk.Label(price_frame, text=f"{food} |", style="rfood.TLabel")
             food_label.place(x=500, y=50 + 50 * index, anchor="e")
             price_label = ttk.Label(
-                price_frame, text=price, style="yfood.TLabel", anchor="w"
+                price_frame,
+                text=f"{price} {self.currency}",
+                style="yfood.TLabel",
+                anchor="w",
             )
             price_label.place(x=500, y=38 + 50 * index)
             index += 1
@@ -236,23 +271,30 @@ class UI:
         logo.image = tk_img
         logo.place(x=self._width, y=self._height, width=300, height=500, anchor="se")
 
-    @property
-    def bill(self):
-        #TODO ADD cost + service charge (client doesn't have to know)
-        return "\n".join(
-            [
-                f"{label} : {entry.get()}"
-                for label, entry in self.price_entries.items()
-                if label != "Discount %"
-            ]
-        )
+    def _start_moving(self, event: Event):
+        self.x = event.x
+        self.y = event.y
+
+    def _stop_moving(self, event: Event):
+        self.x = None
+        self.y = None
+
+    def _on_motion(self, event: Event):
+        deltax = event.x - self.x
+        deltay = event.y - self.y
+        x = self.winfo_x() + deltax
+        y = self.winfo_y() + deltay
+        self.geometry(f"+{x}+{y}")
 
     def clear_fields(self):
         """Reset all the entries with 0"""
         for entry in self.entries:
             entry.delete(0, END)
+            if entry == self.res_entry:
+                continue
             entry.insert(0, 0)
-        self.res_entry.delete(0, END)
+            if entry in self.price_entries.values():
+                entry.insert(END, f" {self.currency}")
 
     def erase_calc(self):
         """Reset the display ofthe calculator"""
@@ -267,6 +309,7 @@ class UI:
         entry.insert(END, value)
 
     def compute_string(self, entry: ttk.Entry, calculator_str: str):
+        """Use ScientCalc to compute calc display string"""
         res, error = self.calc.compute_string(calculator_str)
         print(res, error)
         entry.delete(0, END)
@@ -359,34 +402,33 @@ class UI:
         pdf_img_path = os.path.join(curr_path, "logo_pdf.png")
         self.create_png_picture(self.logo_path, pdf_img_path)
 
-        c = canvas.Canvas(pdf_path, pagesize=(400, 300), bottomup=0)
+        c = canvas.Canvas(pdf_path, pagesize=(300, 300), bottomup=0)
         c.setAuthor("Hylectrif")
         c.setFont("Helvetica", 12)
         c.setTitle(f"Bill for the order n°{order_id} 📝")
-
         page_x, page_y = c._pagesize
-        c.drawCentredString(page_x / 2, page_y / 10, self.restaurant_name)
-        c.drawCentredString(page_x / 2, page_y / 10 + 25, date)
-        # WEIRD
-        """c.roundRect(100, 100, 150, 10, 150, fill=1)"""
 
         c.drawImage(
-            pdf_img_path,
-            0,
-            page_y - 100,
-            mask="auto",
+            pdf_img_path, page_x - 100, page_y - 100, mask="auto",
         )
+        c.drawImage(
+            pdf_img_path, 0, page_y - 100, mask="auto",
+        )
+        c.drawCentredString(page_x / 2, page_y / 10, self.restaurant_name)
+        c.drawCentredString(page_x / 2, page_y / 10 + 25, date)
+        c.roundRect(page_x / 2 - 25, page_y - 50, 50, 40, 50, fill=1)
+
         for index, text in enumerate(self.bill.split("\n"), 1):
             c.drawCentredString(page_x / 2, page_y / 4 + index * 25, text)
         c.save()
 
-    def create_png_picture(self, curr_path, final_path=None, max_width: int = 100, max_height: int = 100):
+    def create_png_picture(self, curr_path: str, final_path=None):
+        """Create a minify version of the logo to print on the pdf file"""
         final_path = final_path or curr_path
         img = Image.open(curr_path)
         img = img.resize((100, 100), Image.ANTIALIAS).transpose(Image.FLIP_TOP_BOTTOM)
         img.save(final_path)
 
 
-root = ThemedTk(theme="equilux")
-gui = UI(root)
-root.mainloop()
+gui = UI()
+gui.mainloop()
