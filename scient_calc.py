@@ -3,7 +3,7 @@
 class ScientCalc:
     def __init__(self):
         # Strategic order (scientific calculus + negative number)
-        self.operands = ["*", "/", "+", "-"]
+        self.operands = ["+", "-", "/", "*"]
 
     def compute_string(self, calculator_str: str):
         if calculator_str:
@@ -16,7 +16,6 @@ class ScientCalc:
 
     def _compute(self, operand: str = "+", part1: str = "0", part2: str = "0") -> float:
         """Recursive function trying to divide operations and compute (Tree style)"""
-        # TODO bug 0-+6
         error = False
         try:
             res1 = float(part1)

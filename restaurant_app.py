@@ -10,7 +10,6 @@ from PIL import Image, ImageTk
 
 
 from scient_calc import ScientCalc
-from helpers import concrete_inc_dec
 
 localtime = datetime.now().strftime("%A, %d %B %Y %H:%M:%S")
 
@@ -18,41 +17,43 @@ localtime = datetime.now().strftime("%A, %d %B %Y %H:%M:%S")
 class UI(ThemedTk):
     """Main class for the whole interface"""
 
-    # TODO Improve PDF
     # TODO Find a way to use transparency (nice result)
     # self.wm_attributes("-transparentcolor", "#000")
-    # TODO Style tabs
-    # https://stackoverflow.com/questions/23038356
     # TODO Add tooltip
     # https://stackoverflow.com/questions/20399243
     # TODO SEE
     # http://effbot.org/tkinterbook/wm.htm
-    # TODO Fix 'scient' calc
-    # 5+5*5
+    # TODO AJUST FULLSCREEN STYLE
+    # TODO COMPACT ATTRIBUTE WIDGETS IN DICT
+
     def __init__(self, restaurant_name: str = ""):
         ThemedTk.__init__(self, theme="equilux")
         self.articles = {
-            "Fried Potato": 35,
-            "Chicken Burger": 25,
-            "Big King": 20,
-            "Chicken Royal": 40,
-            "Veg Salad": 55,
+            "Fried Potatoes": 4,
+            "Chicken Burger": 8,
+            "Waffles": 3.5,
+            "Chicken Royal Salad": 10,
+            "Veggie Salad": 9,
         }
-        self.operands = ["*", "/", "+", "-"]
+        self.operands = ["+", "-", "*", "/"]
         self.currency = "$"
         self.restaurant_name = restaurant_name or "Le petit français"
         self.calc = ScientCalc()
 
         self.bg_color = "#252525"
-        self.ico_path = None
         self.logo_path = None
         self.notebk = None
         self.res_entry = None
+        self.order_label = None
         self.order_entry = None
         self.discount_p_entry = None
         self.entries = []
-        self.article_entries = []
-        self.price_entries = {}
+        self.calc_buttons = []
+        # {text : (label, entry)
+        self.food_widgets = {}
+        self.total_widgets = {}
+        self.x = 0
+        self.y = 0
         self._width = 1028
         self._height = 500
 
@@ -71,65 +72,70 @@ class UI(ThemedTk):
         self._configure_style()
 
         curr_path = os.path.dirname(os.path.abspath(__file__))
-        self.ico_path = os.path.join(curr_path, "ico.ico")
+        ico_path = os.path.join(curr_path, "ico.ico")
         self.logo_path = os.path.join(curr_path, "ananas.png")
-        self.iconbitmap(self.ico_path)
+        self.iconbitmap(ico_path)
 
         ####### TOP MENU
         self.notebk = ttk.Notebook(self)
         self.notebk.place(x=0, y=25)
-        common_frame = ttk.Frame(self.notebk, width=self._width, height=self._height)
-        price_frame = ttk.Frame(self.notebk, width=self._width, height=self._height)
-        self.notebk.add(common_frame, text="Billing ۩ ")
-        self.notebk.add(price_frame, text=f"Prices {self.currency} ")
-
-        menu_bar = ttk.Frame(self, style="menu.TLabel")
-        menu_bar.place(x=0, y=0, width=self._width, height=25)
-        title_menu = ttk.Label(
-            menu_bar,
-            text="Improved Restaurant Management System",
+        self.common_frame = ttk.Frame(
+            self.notebk, width=self._width, height=self._height
+        )
+        self.price_frame = ttk.Frame(
+            self.notebk, width=self._width, height=self._height
+        )
+        self.notebk.add(self.common_frame, text="Billing ۩ ")
+        self.notebk.add(self.price_frame, text=f"Prices {self.currency} ")
+        self.menu_bar = ttk.Frame(self, style="menu.TLabel")
+        self.menu_bar.place(x=0, y=0, width=self._width, height=25)
+        self.title_menu = ttk.Label(
+            self.menu_bar,
+            text=f"{self.restaurant_name} - Improved Restaurant Management System",
             style="smalltitle.TLabel",
         )
-        title_menu.place(x=self._width / 2, y=12, anchor="center")
-        minimize_button = ttk.Button(
-            menu_bar, text="_", style="exit.TButton", command=self._minimize
+        self.title_menu.place(x=self._width / 2, y=12, anchor="center")
+        self.minimize_button = ttk.Button(
+            self.menu_bar, text="_", style="exit.TButton", command=self._minimize
         )
-        minimize_button.place(x=self._width - 75, y=0, width=25, height=25)
-        fullscreen_button = ttk.Button(
-            menu_bar, text="□", style="exit.TButton", command=self._fullscreen
+        self.minimize_button.place(x=self._width - 75, y=0, width=25, height=25)
+        self.fullscreen_button = ttk.Button(
+            self.menu_bar, text="□", style="exit.TButton", command=self._fullscreen
         )
-        fullscreen_button.place(x=self._width - 50, y=0, width=25, height=25)
-        exit_button = ttk.Button(
-            menu_bar, text="X", style="exit.TButton", command=self.destroy
+        self.fullscreen_button.place(x=self._width - 50, y=0, width=25, height=25)
+        self.exit_button = ttk.Button(
+            self.menu_bar, text="X", style="exit.TButton", command=self.destroy
         )
-        exit_button.place(x=self._width - 25, y=0, width=25, height=25)
+        self.exit_button.place(x=self._width - 25, y=0, width=25, height=25)
 
         # https://stackoverflow.com/questions/4055267#answer-4055612
-        menu_bar.bind("<ButtonPress-1>", self._start_moving)
-        menu_bar.bind("<ButtonRelease-1>", self._stop_moving)
-        menu_bar.bind("<B1-Motion>", self._on_motion)
-        title_menu.bind("<ButtonPress-1>", self._start_moving)
-        title_menu.bind("<ButtonRelease-1>", self._stop_moving)
-        title_menu.bind("<B1-Motion>", self._on_motion)
+        self.menu_bar.bind("<ButtonPress-1>", self._start_moving)
+        self.menu_bar.bind("<ButtonRelease-1>", self._stop_moving)
+        self.menu_bar.bind("<B1-Motion>", self._on_motion)
+        self.menu_bar.bind("<Double-Button-1>", lambda x: self._fullscreen())
+        self.title_menu.bind("<ButtonPress-1>", self._start_moving)
+        self.title_menu.bind("<ButtonRelease-1>", self._stop_moving)
+        self.title_menu.bind("<B1-Motion>", self._on_motion)
+        self.title_menu.bind("<Double-Button-1>", lambda x: self._fullscreen())
 
         self.notebk.bind("<Map>", self._frame_mapped)
         ########## FRAME 1
         ### COMMON LABELS
-        title = ttk.Label(
-            common_frame, text="Restaurant Management®", style="title.TLabel"
+        self.title = ttk.Label(
+            self.common_frame, text="Restaurant Management®", style="title.TLabel"
         )
-        title.place(x=self._width / 2, y=25, anchor="center")
+        self.title.place(x=self._width / 2, y=25, anchor="center")
         self.time_label = ttk.Label(
-            common_frame, text=localtime, style="time.TLabel", cursor="clock"
+            self.common_frame, text=localtime, style="time.TLabel", cursor="clock"
         )
         self.time_label.place(x=self._width / 2, y=65, anchor="center")
 
         ### FOOD MENU
-        self._display_food_frame(common_frame)
+        self._display_food_frame(self.common_frame)
         ### PRICE
-        self._display_total_frame(common_frame)
+        self._display_total_frame(self.common_frame)
         ### CALCULATOR
-        self._display_calculator_frame(common_frame)
+        self._display_calculator_frame(self.common_frame)
         ### CONTROL BUTTONS
         index = 0
         button_labels = {
@@ -138,13 +144,13 @@ class UI(ThemedTk):
         }
         for label, function in button_labels.items():
             control_button = ttk.Button(
-                common_frame, text=label, command=function, cursor="hand2"
+                self.common_frame, text=label, command=function, cursor="hand2"
             )
             control_button.place(x=100 + 200 * index, y=400, width=130, height=30)
             index += 1
 
         ################# FRAME 2
-        self._display_price_frame(price_frame)
+        self._display_price_frame(self.price_frame)
 
         ### COMMON BEHAVIOUR
         self.clear_fields()
@@ -153,9 +159,11 @@ class UI(ThemedTk):
     @property
     def bill(self):
         """Resturn the customer bill which will be display on the PDF file"""
-        # TODO ADD cost + service charge (client doesn't have to know)
         return "\n".join(
-            [f"{label} : {entry.get()}" for label, entry in self.price_entries.items()]
+            [
+                f"{text} : {price_tuple[1].get()}"
+                for text, price_tuple in self.total_widgets.items()
+            ]
         )
 
     @property
@@ -179,16 +187,14 @@ class UI(ThemedTk):
                         ],
                         "background": [
                             ("active", "#E1B12C"),
-                            ("!disabled", "#3C3C3C"),
+                            ("!disabled", self.bg_color),
                         ],
                     },
                 },
                 "TNotebook": {"configure": {"tabmargins": [0, 0, 0, 0]}},
                 "TNotebook.Tab": {
                     "configure": {"padding": [25, 5], "focuscolor": "#464646"},
-                    "map": {
-                        "expand": [("selected", [5, 1, 5, 3])],
-                    },
+                    "map": {"expand": [("selected", [5, 1, 5, 3])],},
                 },
                 "TFrame": {"configure": {"background": self.bg_color},},
                 "TLabel": {"configure": {"background": self.bg_color},},
@@ -209,12 +215,12 @@ class UI(ThemedTk):
             foreground=[("active", "#CCCCCC"), ("!disabled", "#CCCCCC"),],
             background=[("active", "#ff0000"), ("!disabled", "#3C3C3C"),],
         )
-        print(style.element_options("TNotebook.focus"))
+        print(style.element_options("TEntry.cursor"))
 
     def _display_food_frame(self, common_frame: ttk.Frame):
         """Display every food with corresponding buttons and entries"""
-        temp_label = ttk.Label(common_frame, text="Order Num :")
-        temp_label.place(x=100, y=100)
+        self.order_label = ttk.Label(common_frame, text="Order Num :")
+        self.order_label.place(x=100, y=100)
         self.order_entry = ttk.Entry(common_frame, justify="center", cursor="arrow")
         self.order_entry.place(x=230, y=100, width=60)
         self.order_entry.bind("<Key>", lambda e: "break")
@@ -222,15 +228,14 @@ class UI(ThemedTk):
         self.entries.append(self.order_entry)
 
         for index, item in enumerate(self.articles.keys()):
-            ttk.Label(common_frame, text=item).place(
-                x=250, y=160 + index * 30, anchor="e"
-            )
-            temp_entry = ttk.Entry(common_frame, justify="center", cursor="arrow")
-            temp_entry.place(x=275, y=150 + 30 * index, width=40)
-            temp_entry.bind("<Key>", lambda e: "break")
-            self.add_buttons(common_frame, temp_entry, 275, 150 + 30 * index, 40)
-            self.article_entries.append((item, temp_entry))
-            self.entries.append(temp_entry)
+            article_label = ttk.Label(common_frame, text=item)
+            article_label.place(x=250, y=160 + index * 30, anchor="e")
+            article_entry = ttk.Entry(common_frame, justify="center", cursor="arrow")
+            article_entry.place(x=275, y=150 + 30 * index, width=40)
+            article_entry.bind("<Key>", lambda e: "break")
+            self.add_buttons(common_frame, article_entry, 275, 150 + 30 * index, 40)
+            self.food_widgets.update({item: (article_label, article_entry)})
+            self.entries.append(article_entry)
 
     def _display_total_frame(self, common_frame: ttk.Frame):
         """Display all the total price entries"""
@@ -259,7 +264,7 @@ class UI(ThemedTk):
             price_entry.place(x=535, y=150 + 30 * index, width=100)
             price_entry.bind("<Key>", lambda e: "break")
             self.entries.append(price_entry)
-            self.price_entries.update({price_txt: price_entry})
+            self.total_widgets.update({price_txt: (total_label, price_entry)})
 
     def _display_calculator_frame(self, common_frame):
         """Display the calculator"""
@@ -275,18 +280,19 @@ class UI(ThemedTk):
             line = int(i / 3)
             column = int(i % 3)
             # x=i+1 to avoid reference to final value of i
-            temp_button = ttk.Button(
+            calc_button = ttk.Button(
                 common_frame,
                 text=i + 1,
                 command=lambda x=i + 1: self.add_to_entry(self.res_entry, x),
                 cursor="hand2",
             )
-            temp_button.place(
+            calc_button.place(
                 x=775 + 51 * column,
                 y=160 + 51 * line,
                 width=button_width,
                 height=button_height,
             )
+            self.calc_buttons.append(calc_button)
 
         for index, operand in enumerate(self.operands):
             operand_button = ttk.Button(
@@ -328,16 +334,16 @@ class UI(ThemedTk):
 
     def _display_price_frame(self, price_frame: ttk.Frame):
         """Display the price of the food in the second notebook frame"""
-        index = 0
         articles = {"Food": "Price", **self.articles}
-        for food, price in articles.items():
+        for index, food in enumerate(articles.keys()):
             food_label = ttk.Label(price_frame, text=food, style="rfood.TLabel")
             food_label.place(x=350, y=50 + 50 * index, anchor="w")
             price_label = ttk.Label(
-                price_frame, text=f"{price} {self.currency}", style="yfood.TLabel"
+                price_frame,
+                text=f"{articles[food]} {self.currency}",
+                style="yfood.TLabel",
             )
             price_label.place(x=600, y=50 + 50 * index, anchor="e")
-            index += 1
         img = Image.open(self.logo_path).rotate(45, expand=True)
         tk_img = ImageTk.PhotoImage(img)
         logo = ttk.Label(price_frame, image=tk_img)
@@ -356,23 +362,26 @@ class UI(ThemedTk):
 
     def _on_motion(self, event: Event):
         """Usedto move the window when it is dragged"""
-        deltax = event.x - self.x
-        deltay = event.y - self.y
-        x = self.winfo_x() + deltax
-        y = self.winfo_y() + deltay
-        self.geometry(f"+{x}+{y}")
+        if not (self.x is None or self.y is None):
+            deltax = event.x - self.x
+            deltay = event.y - self.y
+            x = self.winfo_x() + deltax
+            y = self.winfo_y() + deltay
+            self.geometry(f"+{x}+{y}")
 
     def clear_fields(self):
         """Reset all the entries with 0"""
+        price_entries = [price_tuple[1] for price_tuple in self.total_widgets.values()]
         for entry in self.entries:
+            entry["state"] = "normal"
             entry.delete(0, END)
-            if entry == self.res_entry:
-                continue
-            entry.insert(0, 0)
-            if entry in self.price_entries.values():
-                entry.insert(END, f".00 {self.currency}")
-            elif entry == self.discount_p_entry:
-                entry.insert(END, " %")
+            if entry != self.res_entry:
+                entry.insert(0, 0)
+                if entry in price_entries:
+                    entry.insert(END, f".00 {self.currency}")
+                elif entry == self.discount_p_entry:
+                    entry.insert(END, " %")
+                entry["state"] = "readonly"
 
     def _erase_calc(self):
         """Reset the display ofthe calculator"""
@@ -409,14 +418,16 @@ class UI(ThemedTk):
     def calc_total(self):
         """Calculate the bill price"""
         price = 0
-        for article, entry in self.article_entries:
-            price += int(entry.get()) * self.articles[article]
+        for text, article_tuple in self.food_widgets.items():
+            price += self.articles[text] * int(article_tuple[1].get())
         self._display_total(price)
 
     def _display_total(self, price: float):
         """Display the bill prices"""
         discount_p = int(self.discount_p_entry.get().split()[0])
-        for entry in [*self.price_entries.values(), self.discount_p_entry]:
+        price_entries = [price_tuple[1] for price_tuple in self.total_widgets.values()]
+        for entry in [*price_entries, self.discount_p_entry]:
+            entry["state"] = "normal"
             entry.delete(0, END)
         service = price * 0.1
         tax = price * 0.2
@@ -424,14 +435,16 @@ class UI(ThemedTk):
         total = sub_total * (1 - discount_p / 100)
         discount = round(sub_total - total, 2)
         self.discount_p_entry.insert(0, f"{discount_p} %")
-        self.price_entries["Cost"].insert(0, f"{price:.02f} {self.currency}")
-        self.price_entries["Service Charge"].insert(
+        self.total_widgets["Cost"][1].insert(0, f"{price:.02f} {self.currency}")
+        self.total_widgets["Service Charge"][1].insert(
             0, f"{service:.02f} {self.currency}"
         )
-        self.price_entries["Tax"].insert(0, f"{tax:.02f} {self.currency}")
-        self.price_entries["SubTotal"].insert(0, f"{sub_total:.02f} {self.currency}")
-        self.price_entries["Discount"].insert(0, f"{discount:.02f} {self.currency}")
-        self.price_entries["Total"].insert(0, f"{total:.02f} {self.currency}")
+        self.total_widgets["Tax"][1].insert(0, f"{tax:.02f} {self.currency}")
+        self.total_widgets["SubTotal"][1].insert(0, f"{sub_total:.02f} {self.currency}")
+        self.total_widgets["Discount"][1].insert(0, f"{discount:.02f} {self.currency}")
+        self.total_widgets["Total"][1].insert(0, f"{total:.02f} {self.currency}")
+        for entry in [*price_entries, self.discount_p_entry]:
+            entry["state"] = "readonly"
 
     def add_buttons(
         self,
@@ -459,14 +472,32 @@ class UI(ThemedTk):
         )
         minus_button.place(x=entry_x - 20, y=entry_y, width=20, height=20)
 
+    def concrete_inc_dec(self, entry, operand: str):
+        """Concrete function to add or substract the value from an input"""
+        old_value = entry.get().split()[0]
+        value = float(old_value)
+        if operand == "+":
+            value += 1
+        else:
+            value -= 1
+            if value < 0:
+                value = 0
+        if value == int(value):
+            value = int(value)
+
+        entry["state"] = "normal"
+        entry.delete(0, "end")
+        entry.insert(0, value)
+        entry["state"] = "readonly"
+
     def _increment(self, entry: ttk.Entry):
         """Increment the value of the entry by 1"""
-        concrete_inc_dec(entry, "+")
+        self.concrete_inc_dec(entry, "+")
         self.calc_total()
 
     def _decrement(self, entry: ttk.Entry):
         """Decrement the value of the entry by 1"""
-        concrete_inc_dec(entry, "-")
+        self.concrete_inc_dec(entry, "-")
         self.calc_total()
 
     def save_bill_to_pdf(self):
@@ -522,25 +553,68 @@ class UI(ThemedTk):
         """Minimize the window in the task bar"""
         self.update_idletasks()
         self.overrideredirect(False)
-        # root.state('withdrawn')
         self.state("iconic")
 
     def _fullscreen(self):
         """Set the window to fulscreen or resize it"""
         if self.is_fullscreen:
-            # MINIMIZE
             self.state("normal")
-            self._width = 1028
-            self._height = 500
-            self.geometry(f"{self._width}x{self._height}")
         else:
-            # FULLSCREEN
             self.state("zoomed")
-            self.update()
-            self._width, self._height = [
-                int(x) for x in self.winfo_geometry().split("+")[0].split("x")
-            ]
-            self.geometry(f"{self._width}x{self._height}")
+
+        self._width, self._height = [
+            int(x) for x in self.winfo_geometry().split("+")[0].split("x")
+        ]
+        self.replace_widgets(self.is_fullscreen)
+
+    def replace_widgets(self, fullscreen):
+        """Replace widgets following the size of the window"""
+        width_ratio = self._width / 1028
+        height_ratio = self._height / 500
+        self.menu_bar.place(x=0, y=0, width=self._width, height=25)
+        self.title_menu.place(x=self._width / 2, y=12, anchor="center")
+        self.minimize_button.place(x=self._width - 75, y=0, width=25, height=25)
+        self.fullscreen_button.place(x=self._width - 50, y=0, width=25, height=25)
+        self.exit_button.place(x=self._width - 25, y=0, width=25, height=25)
+
+        self.common_frame.config(width=self._width, height=self._height)
+        self.title.place(x=self._width / 2, y=25 * height_ratio, anchor="center")
+        self.time_label.place(x=self._width / 2, y=65 * height_ratio, anchor="center")
+
+        self.order_label.place(x=100 * width_ratio, y=100 * height_ratio)
+        self.order_entry.place(x=230 * width_ratio, y=100 * height_ratio)
+
+        for index, article_tuple in enumerate(self.food_widgets.values()):
+            article_tuple[0].place(
+                x=250 * width_ratio, y=(160 + index * 30) * height_ratio, anchor="e"
+            )
+            article_tuple[1].place(
+                x=275 * width_ratio, y=(150 + 30 * index) * height_ratio
+            )
+        self.discount_p_entry.place(x=380 * width_ratio, y=97 * height_ratio)
+        for index, price_tuple in enumerate(self.total_widgets.values()):
+            price_tuple[0].place(
+                x=525 * width_ratio, y=(160 + 30 * index) * height_ratio, anchor="e"
+            )
+            price_tuple[1].place(
+                x=535 * width_ratio, y=(150 + 30 * index) * height_ratio
+            )
+
+        self.res_entry.place(
+            x=775 * width_ratio, y=100 * height_ratio, width=204, height=50
+        )
+        for index, calc_button in enumerate(self.calc_buttons):
+            line = int(index / 3)
+            column = int(index % 3)
+            calc_button.place(
+                x=775 * width_ratio + 51 * column, y=160 * height_ratio + 51 * line,
+            )
+
+        self.price_frame.config(width=self._width, height=self._height)
+
+        self.update()
+        if fullscreen:
+            pass
 
 
 if __name__ == "__main__":
