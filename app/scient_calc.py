@@ -1,9 +1,7 @@
-
-
 class ScientCalc:
     def __init__(self):
         # Strategic order (scientific calculus + negative number)
-        self.operands = ["+", "-", "/", "*"]
+        self._operands = ["+", "-", "/", "*"]
 
     def compute_string(self, calculator_str: str):
         if calculator_str:
@@ -20,7 +18,7 @@ class ScientCalc:
         try:
             res1 = float(part1)
         except ValueError:
-            for o in self.operands:
+            for o in self._operands:
                 split_str = part1.rsplit(o, 1)
                 if len(split_str) > 1:
                     res1, err = self._compute(o, split_str[0], split_str[1])
@@ -29,7 +27,7 @@ class ScientCalc:
         try:
             res2 = float(part2)
         except ValueError:
-            for o in self.operands:
+            for o in self._operands:
                 split_str = part2.rsplit(o, 1)
                 if len(split_str) > 1:
                     res2, err = self._compute(o, split_str[0], split_str[1])
@@ -40,7 +38,7 @@ class ScientCalc:
         try:
             return (operand_dict[operand](res1, res2), error)
         except (UnboundLocalError, ZeroDivisionError):
-            error |= True
+            error = True
             return (0, error)
 
     def _add(self, f1: float, f2: float) -> float:
